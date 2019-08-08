@@ -9,8 +9,7 @@ const { BatchHttpLink } = require('apollo-link-batch-http');
 const { InMemoryCache } = require('apollo-cache-inmemory');
 const gql = require("graphql-tag");
 const scjssconfig = require('../scjssconfig.json');
-const { createDefaultDisconnectedServer } = require('@sitecore-jss/sitecore-jss-dev-tools');
-const Express = require('express');
+const { ManifestManager, createDisconnectedLayoutService, createDisconnectedDictionaryService } = require('@sitecore-jss/sitecore-jss-dev-tools');
 
 class GeneratorConfigFactory {
 
@@ -30,32 +29,123 @@ class GeneratorConfigFactory {
             ],
             APP_SITECORE_PATH: `/sitecore/content/${config.jssAppName}`,
             MEDIA_SITECORE_PATH: `/sitecore/media library/${config.jssAppName}`,
-            MEDIA_PREIX: `/-/media`
+            MEDIA_PREIX: `/-/media`,
+            IS_DISCONNECTED: config.sitecoreApiKey === 'no-api-key-set'
         }
     }
 
 }
 
-class LayoutService {
+class RotueFinderFactory {
+
+    build(config) {
+        if (config.IS_DISCONNECTED) {
+            return new DisconnectedRouteFinder(config.LANGUAGE);
+        }
+
+        return new ConnectedRouteFinder(config);
+    }
+
+}
+
+class LayoutServiceFactory {
+
+    build(config) {
+        if (config.IS_DISCONNECTED) {
+            return new DisconnectedLayoutService();
+        }
+
+        return new ConnectedLayoutService(config.PROXY_URL, config.API_KEY);
+    }
+
+}
+
+class DisconnectedLayoutService {
+
+    start() {
+        // options are largely pulled from disconnected-mode-proxy.js
+        const options = {
+            appRoot: path.join(__dirname, '..'),
+            appName: config.appName,
+            watchPaths: ['./data'],
+            language: config.language,
+            port: process.env.PROXY_PORT || 3042
+        };
+
+        // https://github.com/Sitecore/jss/blob/master/packages/sitecore-jss-dev-tools/src/disconnected-server/create-default-disconnected-server.ts
+        const manifestManager = new ManifestManager({
+            appName: options.appName,
+            rootPath: options.appRoot,
+            watchOnlySourceFiles: options.watchPaths,
+            requireArg: options.requireArg,
+            sourceFiles: options.sourceFiles,
+        });
+
+        return manifestManager
+            .getManifest(options.language)
+            .then((manifest) => {
+                this.layoutService = createDisconnectedLayoutService({
+                    manifest,
+                    manifestLanguageChangeCallback: manifestManager.getManifest
+                });
+
+                this.dictionaryService = createDisconnectedDictionaryService({
+                    manifest,
+                    manifestLanguageChangeCallback: manifestManager.getManifest,
+                });
+            });
+    }
+
+    callMiddlewhere(service, query) {
+        // shout out https://github.com/Sitecore/jss/blob/b41311b2aa8ed885a4d6d1d3d030da6e3496515b/docs/build/prerender.js
+        const fakeRequest = {
+            ...query
+        };
+
+        return new Promise((resolve, reject) => {
+            const fakeResponse = {
+                sendStatus: function (statusCode) {
+                    reject();
+                },
+                json: function (result) {
+                    resolve(result);
+                },
+            };
+
+            service.middleware(fakeRequest, fakeResponse);
+        });
+    }
+
+    fetchLayoutData(route, language) {
+        // https://github.com/Sitecore/jss/blob/master/packages/sitecore-jss-dev-tools/src/disconnected-server/layout-service.ts
+        return this.callMiddlewhere(this.layoutService, {
+            query: {
+                sc_lang: language,
+                item: route
+            }
+        });
+    }
+
+    fetchDictionary(language) {
+        // https://github.com/Sitecore/jss/blob/master/packages/sitecore-jss-dev-tools/src/disconnected-server/dictionary-service.ts
+        return this.callMiddlewhere(this.dictionaryService, {
+            params: {
+                language
+            }
+        });
+    }
+}
+
+class ConnectedLayoutService {
 
     constructor(proxyUrl, apiKey) {
         this.proxyUrl = proxyUrl;
         this.apiKey = apiKey;
+    }
 
-        if (this.apiKey === 'no-api-key-set') {
-            this.server = new Express();
-
-            const proxyOptions = {
-                appRoot: path.join(__dirname, '..'),
-                appName: config.appName,
-                watchPaths: ['./data'],
-                language: config.language,
-                port: process.env.PROXY_PORT || 3042,
-                server: this.server
-            };
-
-            createDefaultDisconnectedServer(proxyOptions);
-        }
+    start() {
+        // nothing to initialize here, we're just making http requests.
+        return Promise.resolve();
     }
 
     fetchLayoutData(route, language) {
@@ -87,6 +177,11 @@ class DisconnectedRouteFinder {
     }
 
     findRoutes(routePath, parts) {
+        const foundRoutes = this.findRoutesSync(routePath, parts);
+        return Promise.resolve(foundRoutes);
+    }
+
+    findRoutesSync(routePath, parts) {
         const foundRoutes = [],
             pathParts = parts || [];
 
@@ -103,10 +198,10 @@ class DisconnectedRouteFinder {
             } else {
                 pathParts.push(file);
 
-                const nestedRoutes = this.findRoutes(fullPath, pathParts);
+                const nestedRoutes = this.findRoutesSync(fullPath, pathParts);
 
                 if (nestedRoutes && nestedRoutes.length) {
-                    foundRoutes.push.apply(foundRoutes, nestedRoutes);
+                    foundRoutes.push(...nestedRoutes);
                 }
 
                 pathParts.pop();
@@ -138,37 +233,37 @@ class RecursiveItemFinder {
 
     async find(query, rootPath, filterFunction) {
         const graphQLClient = new GraphQLClientFactory().build();
-
-        const queryResult = await this.runFindQuery(query, rootPath, filterFunction, graphQLClient);
-        
+        const queryResult = await this.runFindQuery(query, rootPath, rootPath, filterFunction, graphQLClient);
         return queryResult;
     }
 
-    async runFindQuery(query, rootPath, filterFunction, gqlClient) {
+    // adapted from https://gist.github.com/lovasoa/8691344
+    async runFindQuery(query, rootPath, pathToQuery, filterFunction, gqlClient) {
         const graphQLClient = gqlClient || new GraphQLClientFactory().build();
 
-        let children = await this.requestData(graphQLClient, query, rootPath);
+        let children = await this.requestData(graphQLClient, query, pathToQuery);
 
         children = await Promise.all(children.map(async child => {
             const isMatch = filterFunction(child);
             const matches = [];
 
             if (child.hasChildren) {
-                const subQueryPromise = await this.runFindQuery(query, child.path, filterFunction, graphQLClient);
-                matches.push.apply(matches, subQueryPromise);
+                const subItems = await this.runFindQuery(query, rootPath, child.path, filterFunction, graphQLClient);
+                matches.push(...subItems);
             }
 
             if (isMatch) {
+                const cleanPath = child.path.replace(rootPath + '/home', '/').replace('//', '/'); // meh, revisit
                 matches.push({
                     child,
-                    route: child.path.replace(rootPath + '/home', '/').replace('//', '/') // meh, revisit
+                    route: cleanPath
                 })
             }
 
             return Promise.resolve(matches);
         }));
 
-        return children.reduce((all, folderContents) => all.concat(folderContents), []);
+        return children.reduce((all, foundRoutes) => all.concat(foundRoutes), []);
     }
 
     requestData(client, query, path) {
@@ -286,11 +381,14 @@ class StaticSiteGenerator {
 
     constructor() {
         this.config = new GeneratorConfigFactory().build();
-        this.layoutService = new LayoutService(this.config.PROXY_URL, this.config.API_KEY);
-        this.disconnectedRouteFinder = new DisconnectedRouteFinder(this.config.LANGUAGE);
-        this.connectedRouteFinder = new ConnectedRouteFinder(this.config);
+        this.layoutService = new LayoutServiceFactory().build(this.config);
+        this.routeFinder = new RotueFinderFactory().build(this.config);
         this.fileSystemUtilities = new FileSystemUtilities();
         this.mediaFinder = new MediaFinder(this.config);
+    }
+
+    start() {
+        return this.layoutService.start();
     }
 
     writeRouteToDisk(route, error, html) {
@@ -304,45 +402,6 @@ class StaticSiteGenerator {
         } else {
             fs.writeFileSync(output, html, { encoding: 'utf8' });
         }
-    }
-
-    collectRoutes(disconnected) {
-        let routePromise;
-        if (disconnected) {
-            const foundRoutes = this.disconnectedRouteFinder.findRoutes(this.config.ROUTE_PATH);
-            routePromise = Promise.resolve(foundRoutes);
-        } else {
-            routePromise = this.connectedRouteFinder.findRoutes();
-        }
-        return routePromise;
-    }
-
-    waitForServers(urls) {
-        return new Promise((resolve) => {
-            const checkingServers = {},
-                onlineServers = [];
-
-            urls.forEach((url) => {
-                if (!checkingServers[url]) {
-                    checkingServers[url] = true;
-                }
-
-                var interval = setInterval(() => {
-                    fetch(url)
-                        .then(() => {
-                            onlineServers.push(url);
-
-                            if (onlineServers.length === urls.length) {
-                                clearInterval(interval);
-                                resolve();
-                            }
-                        })
-                        .catch(() => {
-                            delete checkingServers[url];
-                        });
-                }, 1000);
-            });
-        });
     }
 
     renderViewToHtml(renderView, data, viewPath, viewBag) {
@@ -414,10 +473,9 @@ class StaticSiteGenerator {
     }
 
     async handleServerReady() {
-        const isDisconnected = config.sitecoreApiKey === 'no-api-key-set',
-            viewBag = await this.buildViewBag();
+        const viewBag = await this.buildViewBag();
 
-        return this.collectRoutes(isDisconnected)
+        return this.routeFinder.findRoutes(this.config.ROUTE_PATH)
             .then(routesToProcess => {
                 if (routesToProcess) {
 
@@ -427,7 +485,7 @@ class StaticSiteGenerator {
                         chain = chain.then(() => this.handleRoute(route, viewBag));
                     });
 
-                    chain = chain.then(() => this.copyMedia(isDisconnected));
+                    chain = chain.then(() => this.copyMedia(this.config.IS_DISCONNECTED));
 
                     return chain;
                 }
@@ -444,8 +502,7 @@ class StaticSiteGenerator {
     }
 
     run() {
-        return this.waitForServers([`${this.config.PROXY_URL}/`])
-            .then(() => this.handleServerReady());
+        return this.handleServerReady();
     }
 
 }
@@ -453,6 +510,7 @@ class StaticSiteGenerator {
 const generator = new StaticSiteGenerator();
 
 generator
-    .run()
+    .start()
+    .then(() => generator.run())
     .then(() => console.log('Static Site Generated'))
     .then(() => process.exit(0));
