@@ -6,9 +6,13 @@ const scjssconfig = require('../scjssconfig.json');
 const disconnected = process.argv.some((arg) => arg === '--disconnected');
 
 const configOverrides = { 
-    sitecoreApiHost: `http://erzr-jss-static-site-generator.s3-website-us-east-1.amazonaws.com`,
-    sitecoreApiKey: disconnected ? 'no-api-key-set' : null
+    sitecoreApiHost: `http://static.local`,
+    proxyHost: disconnected ? null : scjssconfig.sitecore.layoutServiceHost
 };
+
+if (disconnected) {
+  configOverrides.sitecoreApiKey = 'no-api-key-set';
+}
 
 /* eslint-disable no-console */
 

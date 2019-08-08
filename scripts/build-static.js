@@ -9,6 +9,8 @@ const { BatchHttpLink } = require('apollo-link-batch-http');
 const { InMemoryCache } = require('apollo-cache-inmemory');
 const gql = require("graphql-tag");
 const scjssconfig = require('../scjssconfig.json');
+const { createDefaultDisconnectedServer } = require('@sitecore-jss/sitecore-jss-dev-tools');
+const Express = require('express');
 
 class GeneratorConfigFactory {
 
@@ -17,7 +19,8 @@ class GeneratorConfigFactory {
             JSS_BUILD_STATIC: './build/static',
             JSS_DISCONNECTED_MEDIA: '/data/media',
             BUILD_DIRECTORY: './static',
-            PROXY_URL: `http://localhost:${process.env.PROXY_PORT || 3042}`,
+            PROXY_URL: config.proxyHost || `http://localhost:${process.env.PROXY_PORT || 3042}`,
+            API_KEY: config.sitecoreApiKey,
             HTML_FILE_NAME: 'index.html',
             LANGUAGE: 'en',
             ROUTE_PATH: './data/routes',
@@ -35,8 +38,24 @@ class GeneratorConfigFactory {
 
 class LayoutService {
 
-    constructor(proxyUrl) {
+    constructor(proxyUrl, apiKey) {
         this.proxyUrl = proxyUrl;
+        this.apiKey = apiKey;
+
+        if (this.apiKey === 'no-api-key-set') {
+            this.server = new Express();
+
+            const proxyOptions = {
+                appRoot: path.join(__dirname, '..'),
+                appName: config.appName,
+                watchPaths: ['./data'],
+                language: config.language,
+                port: process.env.PROXY_PORT || 3042,
+                server: this.server
+            };
+
+            createDefaultDisconnectedServer(proxyOptions);
+        }
     }
 
     fetchLayoutData(route, language) {
@@ -56,7 +75,7 @@ class LayoutService {
     }
 
     buildDictionaryUrl(language) {
-        return `${this.proxyUrl}/sitecore/api/jss/dictionary/${packageConfig.config.appName}/${language}?sc_apikey=no-api-key-set`
+        return `${this.proxyUrl}/sitecore/api/jss/dictionary/${packageConfig.config.appName}/${language}?sc_apikey=${this.apiKey}`
     }
 
 }
@@ -288,7 +307,7 @@ class StaticSiteGenerator {
 
     constructor() {
         this.config = new GeneratorConfigFactory().build();
-        this.layoutService = new LayoutService(this.config.PROXY_URL);
+        this.layoutService = new LayoutService(this.config.PROXY_URL, this.config.API_KEY);
         this.disconnectedRouteFinder = new DisconnectedRouteFinder(this.config.LANGUAGE);
         this.connectedRouteFinder = new ConnectedRouteFinder(this.config);
         this.fileSystemUtilities = new FileSystemUtilities();
@@ -456,4 +475,5 @@ const generator = new StaticSiteGenerator();
 
 generator
     .run()
-    .then(() => console.log('Static Site Generated'));
+    .then(() => console.log('Static Site Generated'))
+    .then(() => process.exit(0));
