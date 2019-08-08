@@ -136,76 +136,54 @@ class GraphQLClientFactory {
 
 class RecursiveItemFinder {
 
-    find(query, rootPath, filterFunction) {
-        return new Promise((resolve) => {
-            const graphQlFactory = new GraphQLClientFactory();
-            const graphQLClient = graphQlFactory.build();
+    async find(query, rootPath, filterFunction) {
+        const graphQLClient = new GraphQLClientFactory().build();
 
-            const allRoutes = [];
-
-            this.handleRouteQuery(graphQLClient, query, rootPath, filterFunction, allRoutes, rootPath)
-                .then(() => resolve(allRoutes));
-        });
+        const queryResult = await this.runFindQuery(query, rootPath, filterFunction, graphQLClient);
+        
+        return queryResult;
     }
 
-    handleRouteQuery(client, query, rootPath, filterFunction, allRoutes, path) {
-        // this isn't quite right... but it works. ;)
-        // should reduce all these promises and resolve flattened array.
-        return new Promise((resolve) => {
-            this.runRouteQuery(client, query, rootPath, filterFunction, allRoutes, path)
-                .then(found => {
-                    return Promise.all(
-                        found.map((foundPath) => {
-                            return this.handleRouteQuery(client, query, rootPath, filterFunction, allRoutes, foundPath.path);
-                        })
-                    )
-                })
-                .then(() => {
-                    resolve();
-                });;
-        });
-    }
+    async runFindQuery(query, rootPath, filterFunction, gqlClient) {
+        const graphQLClient = gqlClient || new GraphQLClientFactory().build();
 
-    runRouteQuery(client, query, rootPath, filterFunction, allRoutes, path) {
-        return client.query({
-            variables: { path },
-            query: query
-        }).then(response => {
-            const item = response.data.item;
-            const found = [];
-            const all = [];
+        let children = await this.requestData(graphQLClient, query, rootPath);
 
-            if (item && item.children) {
-                item.children.forEach(child => {
-                    const isMatch = filterFunction(child);
-                    const childData = {
-                        child,
-                        path: child.path,
-                        route: child.path.replace(rootPath + '/home', '/').replace('//', '/') // meh, revisit
-                    };
-                    if (isMatch) {
-                        found.push(childData);
-                    }
-                    all.push(childData);
+        children = await Promise.all(children.map(async child => {
+            const isMatch = filterFunction(child);
+            const matches = [];
+
+            if (child.hasChildren) {
+                const subQueryPromise = await this.runFindQuery(query, child.path, filterFunction, graphQLClient);
+                matches.push.apply(matches, subQueryPromise);
+            }
+
+            if (isMatch) {
+                matches.push({
+                    child,
+                    route: child.path.replace(rootPath + '/home', '/').replace('//', '/') // meh, revisit
                 })
             }
 
-            allRoutes.push.apply(allRoutes, found);
+            return Promise.resolve(matches);
+        }));
 
-            return all;
-        });
+        return children.reduce((all, folderContents) => all.concat(folderContents), []);
     }
 
+    requestData(client, query, path) {
+        return client.query({
+            variables: { path },
+            query: query
+        }).then((response) => response.data.item.children);
+    }
 }
 
 const RouteQuery = gql`
 query SiteQuery($path:String) {
   item(path: $path) {
-    path
-    template {
-      name
-    }
     children {
+      hasChildren
       path
       template {
         name
@@ -239,6 +217,7 @@ const MediaQuery = gql`
 query MediaQuery($path:String) {
   item(path: $path) {
     children {
+      hasChildren
       name
       path
       url
@@ -390,7 +369,7 @@ class StaticSiteGenerator {
         this.fileSystemUtilities.copyFolderSync(this.config.JSS_BUILD_STATIC, `${this.config.BUILD_DIRECTORY}${packageConfig.config.sitecoreDistPath}/static`);
 
         if (isDisconnected) {
-            this.fileSystemUtilities.copyFolderSync(`.${this.config.JSS_DISCONNECTED_MEDIA}`, 
+            this.fileSystemUtilities.copyFolderSync(`.${this.config.JSS_DISCONNECTED_MEDIA}`,
                 `${this.config.BUILD_DIRECTORY}${this.config.JSS_DISCONNECTED_MEDIA}`);
             return Promise.resolve();
         } else {
