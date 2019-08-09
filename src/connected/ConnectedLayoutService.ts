@@ -1,4 +1,7 @@
-export default class ConnectedLayoutService {
+import LayoutService from '../LayoutService';
+import GeneratorConfig from '../GeneratorConfig';
+
+export default class ConnectedLayoutService implements LayoutService {
     private readonly proxyUrl: string;
     private readonly apiKey: string;
     private readonly appName: string;
@@ -11,18 +14,18 @@ export default class ConnectedLayoutService {
         this.fetch = fetch;
     }
 
-    start() {
+    start(_config:GeneratorConfig) {
         // nothing to initialize here, we're just making http requests.
         return Promise.resolve();
     }
 
-    fetchLayoutData(route: string, language: string) {
+    fetchLayoutData(route: string, language: string) : Promise<any> {
         const layoutUrl = this.buildLayoutUrl(route, language);
         return this.fetch(layoutUrl)
             .then(res => res.json());
     }
 
-    fetchDictionary(language: string) {
+    fetchDictionary(language: string) : Promise<any> {
         const dictionaryUrl = this.buildDictionaryUrl(language);
         return this.fetch(dictionaryUrl)
             .then(res => res.json());

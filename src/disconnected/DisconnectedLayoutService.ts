@@ -1,12 +1,13 @@
 import {join} from 'path';
 import GeneratorConfig from '../GeneratorConfig';
 import {ManifestManager, createDisconnectedLayoutService, createDisconnectedDictionaryService} from '@sitecore-jss/sitecore-jss-dev-tools';
+import LayoutService from '../LayoutService';
 
-export default class DisconnectedLayoutService {
+export default class DisconnectedLayoutService  implements LayoutService {
     layoutService: any;
     dictionaryService: any;
 
-    start(config:GeneratorConfig) {
+    start(config:GeneratorConfig) : Promise<any> {
         // options are largely pulled from disconnected-mode-proxy.js
         const options = {
             appRoot: join(__dirname, '..'),
@@ -35,7 +36,7 @@ export default class DisconnectedLayoutService {
             });
     }
 
-    callMiddlewhere(service: any, query: any) {
+    callMiddlewhere(service: any, query: any) : Promise<any> {
         // shout out https://github.com/Sitecore/jss/blob/b41311b2aa8ed885a4d6d1d3d030da6e3496515b/docs/build/prerender.js
         const fakeRequest = {
             ...query
@@ -55,7 +56,7 @@ export default class DisconnectedLayoutService {
         });
     }
 
-    fetchLayoutData(route: string, language: string) {
+    fetchLayoutData(route: string, language: string) : Promise<any> {
         // https://github.com/Sitecore/jss/blob/master/packages/sitecore-jss-dev-tools/src/disconnected-server/layout-service.ts
         return this.callMiddlewhere(this.layoutService, {
             query: {
@@ -65,7 +66,7 @@ export default class DisconnectedLayoutService {
         });
     }
 
-    fetchDictionary(language: string) {
+    fetchDictionary(language: string) : Promise<any> {
         // https://github.com/Sitecore/jss/blob/master/packages/sitecore-jss-dev-tools/src/disconnected-server/dictionary-service.ts
         return this.callMiddlewhere(this.dictionaryService, {
             params: {

@@ -9,7 +9,7 @@ export default class MediaFinder {
         this.config = config;
     }
 
-    findMedia() {
+    findMedia() : Promise<any> {
         return new Promise((resolve) => {
             const recursiveFinder = new RecursiveItemFinder(this.config);
             return recursiveFinder.find(MediaQuery, this.config.MEDIA_SITECORE_PATH,

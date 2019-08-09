@@ -1,22 +1,36 @@
 import GeneratorConfig from './GeneratorConfig';
 
+interface TempConfig {
+    graphQLEndpoint: string;
+    jssAppName: string;
+    sitecoreApiKey: string;
+    proxyHost: string;
+}
+
 export default class GeneratorConfigFactory {
 
+    tempConfig: TempConfig;
+    scjssconfig: any;
+    packageConfig: any;
+
     constructor() {
+        this.tempConfig = require('../src/temp/config');
+        this.packageConfig = require('../package.json');
         try {
-            this.config = require('../src/temp/config');
-        } catch (e) {
-            this.config = {};
+            this.scjssconfig = require('../scjssconfig.json');
+        } catch {
+            this.scjssconfig = { sitecore: {} }
+            console.log('Unable to load scjssconfig');
         }
     }
 
-    build() : GeneratorConfig {
+    build(fetch: GlobalFetch['fetch']) : GeneratorConfig {
         const generatorConfig : GeneratorConfig = {
             JSS_BUILD_STATIC: './build/static',
             JSS_DISCONNECTED_MEDIA: '/data/media',
             BUILD_DIRECTORY: './static',
-            PROXY_URL: this.config.proxyHost || `http://localhost:${process.env.PROXY_PORT || 3042}`,
-            API_KEY: this.config.sitecoreApiKey,
+            PROXY_URL: this.tempConfig.proxyHost || `http://localhost:${process.env.PROXY_PORT || 3042}`,
+            API_KEY: this.tempConfig.sitecoreApiKey,
             HTML_FILE_NAME: 'index.html',
             LANGUAGE: 'en',
             ROUTE_PATH: './data/routes',
@@ -24,10 +38,15 @@ export default class GeneratorConfigFactory {
                 'App Route',
                 'ExampleCustomRouteType'
             ],
-            APP_SITECORE_PATH: `/sitecore/content/${this.config.jssAppName}`,
-            MEDIA_SITECORE_PATH: `/sitecore/media library/${this.config.jssAppName}`,
+            APP_SITECORE_PATH: `/sitecore/content/${this.tempConfig.jssAppName}`,
+            MEDIA_SITECORE_PATH: `/sitecore/media library/${this.tempConfig.jssAppName}`,
             MEDIA_PREIX: `/-/media`,
-            IS_DISCONNECTED: this.config.sitecoreApiKey === 'no-api-key-set'
+            IS_DISCONNECTED: this.tempConfig.sitecoreApiKey === 'no-api-key-set',
+            APP_NAME: this.tempConfig.jssAppName,
+            fetch: fetch,
+            graphQLEndpoint: this.tempConfig.graphQLEndpoint,
+            LAYOUT_SERVICE_HOST: this.scjssconfig.sitecore.layoutServiceHost,
+            SITECORE_DIST_PATH: this.packageConfig.config.sitecoreDistPath
         }
 
         return generatorConfig;

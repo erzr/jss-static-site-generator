@@ -1,15 +1,18 @@
 import {readdirSync, lstatSync} from 'fs';
 import {join} from 'path';
+import RouteFinder from '../RouteFinder';
 
-export default class DisconnectedRouteFinder {
+export default class DisconnectedRouteFinder implements RouteFinder {
     routeFilePattern: RegExp;
+    routePath: string;
 
-    constructor(language: string) {
+    constructor(language: string, routePath: string) {
         this.routeFilePattern = new RegExp(`^${language}\\.(yaml|yml|json)$`, 'i');
+        this.routePath = routePath;
     }
 
-    findRoutes(routePath: string, parts: string[]) {
-        const foundRoutes = this.findRoutesSync(routePath, parts);
+    findRoutes() : Promise<string[]> {
+        const foundRoutes = this.findRoutesSync(this.routePath, []);
         return Promise.resolve(foundRoutes);
     }
 

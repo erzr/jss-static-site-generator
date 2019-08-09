@@ -1,4 +1,5 @@
 export default interface GeneratorConfig {
+    LAYOUT_SERVICE_HOST: string;
     LANGUAGE: string;
     APP_NAME: string;
     API_KEY: string;
@@ -9,4 +10,11 @@ export default interface GeneratorConfig {
     APP_SITECORE_PATH: string;
     graphQLEndpoint: string;
     fetch: GlobalFetch['fetch'];
+    JSS_BUILD_STATIC: string;
+    JSS_DISCONNECTED_MEDIA: string;
+    BUILD_DIRECTORY: string;
+    HTML_FILE_NAME: string;
+    ROUTE_PATH: string;
+    MEDIA_PREIX: string;
+    SITECORE_DIST_PATH: string;
 }
