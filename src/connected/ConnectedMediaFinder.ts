@@ -3,14 +3,26 @@ import GeneratorConfig from "../GeneratorConfig";
 import RecursiveItemFinder from "./RecursiveItemFinder";
 import { MediaQuery } from "./queries";
 import FileSystemUtilities from "../FileSystemUtilities";
-import { createWriteStream } from "fs";
+import WebUtilities from "../WebUtilities";
+
+interface ConnectedMediaItem {
+    child: {
+        url: string;
+        extension: {
+            value: string;
+        };
+    };
+}
 
 export default class ConnectedMediaFinder implements MediaFinder {
 
     private readonly config: GeneratorConfig;
     private readonly fileSystemUtilities: FileSystemUtilities;
+    private readonly webUtilities: WebUtilities;
+    private readonly recursiveItemFinder: RecursiveItemFinder;
 
-    constructor(config: GeneratorConfig, fileSystemUtilities: FileSystemUtilities) {
+    constructor(config: GeneratorConfig, fileSystemUtilities: FileSystemUtilities, 
+        webUtilities?: WebUtilities, recursiveItemFinder?: RecursiveItemFinder) {
         if (!config) {
             throw 'config';
         }
@@ -21,53 +33,37 @@ export default class ConnectedMediaFinder implements MediaFinder {
 
         this.config = config;
         this.fileSystemUtilities = fileSystemUtilities;
+        this.webUtilities = webUtilities || new WebUtilities(config);
+        this.recursiveItemFinder = recursiveItemFinder || new RecursiveItemFinder(this.config);
     }
 
     findMedia(path: string): Promise<any> {
-        return new Promise((resolve) => {
-            const recursiveFinder = new RecursiveItemFinder(this.config);
-            return recursiveFinder.find(MediaQuery, path,
-                (child) => child.extension)
-                .then(allRoutes => {
-                    resolve(allRoutes);
-                });
-        });
+        return this.recursiveItemFinder.find(MediaQuery, path, (child) => child.extension);
     }
 
     copyMedia(): Promise<any> {
         return this.findMedia(this.config.MEDIA_SITECORE_PATH)
-            .then(media => {
-                return Promise.all(media.map(async (mediaItem: { child: { url: string; }; }) => {
-                    const cleanUrl = this.cleanMediaUrl(mediaItem.child),
-                        path = `${this.config.BUILD_DIRECTORY}${cleanUrl}`,
-                        pathWithoutFile = path.substring(0, path.lastIndexOf("/"));
-
-                    this.fileSystemUtilities.ensureDirectoryExists(pathWithoutFile);
-                    return this.downloadFile(this.config.LAYOUT_SERVICE_HOST + mediaItem.child.url, path);
-                }))
-            });
+            .then(media => this.handleFindMediaResponse(media));
     }
 
-    cleanMediaUrl(item: { url: any; extension?: any; }) {
-        return item.url
+    handleFindMediaResponse(media: any) {
+        const allPromises = media.map((mediaItem: ConnectedMediaItem) => this.handleFindMediaResponseItem(mediaItem))
+        return Promise.all(allPromises);
+    }
+
+    async handleFindMediaResponseItem(mediaItem: ConnectedMediaItem) {
+        const cleanUrl = this.cleanMediaUrl(mediaItem),
+            path = `${this.config.BUILD_DIRECTORY}${cleanUrl}`,
+            pathWithoutFile = path.substring(0, path.lastIndexOf("/"));
+
+        this.fileSystemUtilities.ensureDirectoryExists(pathWithoutFile);
+
+        return this.webUtilities.downloadFile(this.config.LAYOUT_SERVICE_HOST + mediaItem.child.url, path);
+    }
+
+    cleanMediaUrl(item: ConnectedMediaItem) {
+        return item.child.url
             .replace(`${this.config.MEDIA_PREIX}/${this.config.APP_NAME}`, '')
-            .replace('.ashx', `.${item.extension.value}`);
+            .replace('.ashx', `.${item.child.extension.value}`);
     }
-
-    // https://stackoverflow.com/questions/37614649/how-can-i-download-and-save-a-file-using-the-fetch-api-node-js
-    async downloadFile(url: string, path: string) {
-        console.log('DOWNLOADING: ' + url + ' to ' + path);
-        const res: any = await this.config.fetch(url);
-        const fileStream = createWriteStream(path);
-        await new Promise((resolve, reject) => {
-            res.body.pipe(fileStream);
-            res.body.on("error", (err: any) => {
-                reject(err);
-            });
-            fileStream.on("finish", function () {
-                resolve();
-            });
-        });
-    }
-
 }

@@ -7,7 +7,23 @@ export default class ConnectedLayoutService implements LayoutService {
     private readonly appName: string;
     private readonly fetch: GlobalFetch['fetch'];
 
-    constructor(proxyUrl: string, apiKey: string, appName: string, fetch: GlobalFetch['fetch']) {
+    constructor(proxyUrl: string, apiKey: string, appName: string, fetch: GlobalFetch['fetch'] | undefined) {
+        if (!proxyUrl) {
+            throw 'proxyUrl';
+        }
+
+        if (!apiKey) {
+            throw 'apiKey';
+        }
+
+        if (!appName) {
+            throw 'appName';
+        }
+
+        if (!fetch) {
+            throw 'fetch';
+        }
+
         this.proxyUrl = proxyUrl;
         this.apiKey = apiKey;
         this.appName = appName;
