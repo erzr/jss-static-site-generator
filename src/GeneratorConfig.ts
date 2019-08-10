@@ -1,3 +1,7 @@
+interface App {
+    renderView(renderCallback: (error: string, content: any) => void, viewPath: any, data: any, viewBag: any): Promise<any>;
+}
+
 export default interface GeneratorConfig {
     LAYOUT_SERVICE_HOST: string;
     LANGUAGE: string;
@@ -17,4 +21,5 @@ export default interface GeneratorConfig {
     ROUTE_PATH: string;
     MEDIA_PREIX: string;
     SITECORE_DIST_PATH: string;
+    renderView: App['renderView'];
 }
