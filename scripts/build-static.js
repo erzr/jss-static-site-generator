@@ -1,18 +1,43 @@
-const app = require('../build/server.bundle');
-const config = require('../src/temp/config');
+const { StaticSiteGenerator } = require('jss-static-site-generator')
 const fetch = require('isomorphic-fetch');
-const fs = require('fs');
-const path = require('path');
+const app = require('../build/server.bundle');
+const tempConfig = require('../src/temp/config');
 const packageConfig = require('../package.json');
-const { ApolloClient } = require('apollo-client');
-const { BatchHttpLink } = require('apollo-link-batch-http');
-const { InMemoryCache } = require('apollo-cache-inmemory');
-const gql = require("graphql-tag");
-const scjssconfig = require('../scjssconfig.json');
-const { ManifestManager, createDisconnectedLayoutService, createDisconnectedDictionaryService } = require('@sitecore-jss/sitecore-jss-dev-tools');
 
+let scjssconfig;
+try {
+    scjssconfig = require('../scjssconfig.json');
+} catch (e) {
+    scjssconfig = { sitecore: {} }
+    console.log('Unable to load scjssconfig');
+}
 
-const generator = new StaticSiteGenerator();
+const config = {
+    JSS_BUILD_STATIC: './build/static',
+    JSS_DISCONNECTED_MEDIA: '/data/media',
+    BUILD_DIRECTORY: './static',
+    PROXY_URL: tempConfig.proxyHost || `http://localhost:${process.env.PROXY_PORT || 3042}`,
+    API_KEY: tempConfig.sitecoreApiKey,
+    HTML_FILE_NAME: 'index.html',
+    LANGUAGE: 'en',
+    ROUTE_PATH: './data/routes',
+    ROUTE_TEMPLATES: [
+        'App Route',
+        'ExampleCustomRouteType'
+    ],
+    APP_SITECORE_PATH: `/sitecore/content/${tempConfig.jssAppName}`,
+    MEDIA_SITECORE_PATH: `/sitecore/media library/${tempConfig.jssAppName}`,
+    MEDIA_PREIX: `/-/media`,
+    IS_DISCONNECTED: tempConfig.sitecoreApiKey === 'no-api-key-set',
+    APP_NAME: tempConfig.jssAppName,
+    fetch: fetch,
+    graphQLEndpoint: tempConfig.graphQLEndpoint,
+    LAYOUT_SERVICE_HOST: scjssconfig.sitecore.layoutServiceHost,
+    SITECORE_DIST_PATH: packageConfig.config.sitecoreDistPath,
+    renderView: app.renderView
+};
+
+const generator = new StaticSiteGenerator(config);
 
 generator
     .start()
