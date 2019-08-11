@@ -1,3 +1,5 @@
+import { GeneratorLogger } from "./logging/GeneratorLogger";
+
 interface App {
     renderView(renderCallback: (error: string, content: any) => void, viewPath: any, data: any, viewBag: any): Promise<any>;
 }
@@ -22,4 +24,5 @@ export default interface GeneratorConfig {
     MEDIA_PREIX: string;
     SITECORE_DIST_PATH: string;
     renderView: App['renderView'];
+    logger: GeneratorLogger | undefined;
 }

@@ -2,12 +2,27 @@ import {join} from 'path';
 import GeneratorConfig from '../GeneratorConfig';
 import {ManifestManager, createDisconnectedLayoutService, createDisconnectedDictionaryService} from '@sitecore-jss/sitecore-jss-dev-tools';
 import LayoutService from '../LayoutService';
+import { GeneratorLogger } from '../logging/GeneratorLogger';
 
 export default class DisconnectedLayoutService  implements LayoutService {
+    
+    private readonly logger: GeneratorLogger;
+
     layoutService: any;
     dictionaryService: any;
 
+
+    constructor(logger: GeneratorLogger) {
+        if (!logger) {
+            throw 'logger';
+        }
+
+        this.logger = logger;
+    }
+
     start(config:GeneratorConfig) : Promise<any> {
+        this.logger.log('Starting Disconnected Layout Service');
+
         // options are largely pulled from disconnected-mode-proxy.js
         const options = {
             appRoot: join(__dirname, '..'),
@@ -21,13 +36,20 @@ export default class DisconnectedLayoutService  implements LayoutService {
             rootPath: options.appRoot
         });
 
+        this.logger.log('Building Manifest');
+
         return manifestManager
             .getManifest(options.language)
             .then((manifest) => {
+
+                this.logger.log('Building Layout Service');
+
                 this.layoutService = createDisconnectedLayoutService({
                     manifest,
                     manifestLanguageChangeCallback: manifestManager.getManifest
                 });
+
+                this.logger.log('Building Dictionary Service');
 
                 this.dictionaryService = createDisconnectedDictionaryService({
                     manifest,
@@ -58,6 +80,9 @@ export default class DisconnectedLayoutService  implements LayoutService {
 
     fetchLayoutData(route: string, language: string) : Promise<any> {
         // https://github.com/Sitecore/jss/blob/master/packages/sitecore-jss-dev-tools/src/disconnected-server/layout-service.ts
+
+        this.logger.log(`Requesting route '${route}' with language '${language}'`);
+
         return this.callMiddlewhere(this.layoutService, {
             query: {
                 sc_lang: language,
@@ -68,6 +93,9 @@ export default class DisconnectedLayoutService  implements LayoutService {
 
     fetchDictionary(language: string) : Promise<any> {
         // https://github.com/Sitecore/jss/blob/master/packages/sitecore-jss-dev-tools/src/disconnected-server/dictionary-service.ts
+
+        this.logger.log(`Requesting dictionary for '${language}'`);
+
         return this.callMiddlewhere(this.dictionaryService, {
             params: {
                 language
