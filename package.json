@@ -1,6 +1,6 @@
 {
   "name": "jss-static-site-generator",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "A static site generator for Sitecore JSS applications. Read more and find information on getting started [here](https://www.adamlamarre.com/static-site-generator-for-sitecore-jss/).",
   "main": "dist/index.js",
   "types": "types/index.d.ts",
