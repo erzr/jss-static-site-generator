@@ -18,7 +18,7 @@ A static site generator for Sitecore JSS applications. Read more and find inform
 "run:static": "npm-run-all --parallel generate:static",
 "generate:static": "node ./scripts/build-static.js"
 ```
-* Run `bootstrap:static:disconnected` or `bootstrap:static:connected` depending on where you want data sourced from.
+* Run `build:static` or `build:static:connected` depending on where you want data sourced from.
 
 # Resources
 * [https://www.adamlamarre.com/static-site-generator-for-sitecore-jss/](https://www.adamlamarre.com/static-site-generator-for-sitecore-jss/)
