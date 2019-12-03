@@ -2,10 +2,11 @@
 # Static Site Generator for Sitecore JSS
 A static site generator for Sitecore JSS applications. Read more and find information on getting started [here](https://www.adamlamarre.com/static-site-generator-for-sitecore-jss/).
 
-# Requirements
-* Sitecore JSS React 11.02 or higher.
+## Prerequisites 
+* A working Sitecore JSS React project (v11.02 or higher). Ensure that `jss setup` has been completed so the required files exist in the project. 
+* The follow patches will need to be applied until the next update; https://github.com/erzr/jss-static-site-generator/issues/9 
 
-# Getting Started
+## Getting Started
 * `npm install jss-static-site-generator --save-dev`
 * Copy `bootstrap-static.js` and `build-static.js` from [here](https://github.com/erzr/jss-static-site-generator/tree/master/scripts).
 * Edit `sitecoreApiHost` in `bootstrap-static.js`, change to the domain where your generated site will be hosted.
@@ -20,7 +21,9 @@ A static site generator for Sitecore JSS applications. Read more and find inform
 ```
 * Run `build:static` or `build:static:connected` depending on where you want data sourced from.
 
-# Resources
+Assets are compiled into the `/static` directory.  
+
+## Resources
 * [https://www.adamlamarre.com/static-site-generator-for-sitecore-jss/](https://www.adamlamarre.com/static-site-generator-for-sitecore-jss/)
 * https://www.adamlamarre.com/static-site-generator-for-sitecore-jss-typescript-and-npm-package/
 * [https://www.npmjs.com/package/jss-static-site-generator](https://www.npmjs.com/package/jss-static-site-generator)
